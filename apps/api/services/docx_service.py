@@ -1,5 +1,6 @@
 import html
 import re
+from copy import deepcopy
 from collections.abc import Iterator
 from io import BytesIO
 from pathlib import Path
@@ -129,6 +130,28 @@ def render_docx(template_path: str | Path, data: dict[str, object]) -> bytes:
 
     buffer = BytesIO()
     document.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def combine_docx_documents(documents: list[bytes]) -> bytes:
+    valid_documents = [document for document in documents if document]
+    if not valid_documents:
+        return b""
+
+    combined_document = Document(BytesIO(valid_documents[0]))
+
+    for document_bytes in valid_documents[1:]:
+        source_document = Document(BytesIO(document_bytes))
+        combined_document.add_page_break()
+
+        for element in source_document.element.body:
+            if element.tag.endswith("}sectPr"):
+                continue
+            combined_document.element.body.append(deepcopy(element))
+
+    buffer = BytesIO()
+    combined_document.save(buffer)
     buffer.seek(0)
     return buffer.getvalue()
 

@@ -5,7 +5,19 @@ export default function ImportarPage({
 }: {
   searchParams?: {
     step?: string;
+    spreadsheetId?: string;
+    templateId?: string;
+    mappingId?: string;
   };
 }) {
-  return <ImportWorkflowPage initialStep={searchParams?.step === "mapping" ? "mapping" : "upload"} />;
+  const step = searchParams?.step;
+
+  return (
+    <ImportWorkflowPage
+      initialStep={step === "mapping" || step === "editor" ? step : "upload"}
+      initialSpreadsheetId={searchParams?.spreadsheetId}
+      initialTemplateId={searchParams?.templateId}
+      initialMappingId={searchParams?.mappingId}
+    />
+  );
 }

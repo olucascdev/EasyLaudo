@@ -169,8 +169,7 @@ export default function DashboardPage() {
             <CardContent className="grid gap-3 pt-6">
               {[
                 { href: "/modelos", label: "Gerenciar modelos", description: "Suba e organize templates DOCX." },
-                { href: "/importar", label: "Importar planilha", description: "Envie um .xlsx e revise o preview." },
-                { href: "/editor", label: "Abrir editor", description: "Ajuste pacientes e gere documentos." },
+                { href: "/importar", label: "Importar planilha", description: "Envie um .xlsx, mapeie colunas e revise no passo 3." },
                 { href: "/extrair", label: "Extrair para XLSX", description: "Revisao de laudos processados." }
               ].map((item) => (
                 <Link

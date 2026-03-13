@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -20,6 +20,11 @@ class SaveMappingPayload(BaseModel):
     map: dict[str, str] = Field(default_factory=dict)
 
 
+class SaveEditorDraftPayload(BaseModel):
+    patients: list[dict[str, Any]] = Field(default_factory=list)
+    selected_index: int = Field(default=0, ge=0)
+
+
 class GenerateReportPayload(BaseModel):
     template_id: str
     patient_data: dict[str, Any] = Field(default_factory=dict)
@@ -29,6 +34,7 @@ class GenerateReportPayload(BaseModel):
 class BatchGenerateReportPayload(BaseModel):
     template_id: str
     patients: list[dict[str, Any]] = Field(default_factory=list)
+    mode: Literal["zip", "combined"] = "zip"
 
 
 class ExportRowsPayload(BaseModel):

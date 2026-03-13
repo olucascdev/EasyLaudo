@@ -7,7 +7,7 @@ type ApiEnvelope<T> = {
   detail?: string;
 };
 
-function buildUrl(path: string) {
+export function buildApiUrl(path: string) {
   return `${API_URL}${path}`;
 }
 
@@ -21,7 +21,7 @@ async function parseError(response: Response) {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(buildUrl(path), {
+  const response = await fetch(buildApiUrl(path), {
     ...init,
     credentials: "include",
     headers: {
@@ -52,7 +52,7 @@ function getFilenameFromDisposition(disposition: string | null) {
 }
 
 async function requestBlob(path: string, init?: RequestInit) {
-  const response = await fetch(buildUrl(path), {
+  const response = await fetch(buildApiUrl(path), {
     ...init,
     credentials: "include",
     headers: {

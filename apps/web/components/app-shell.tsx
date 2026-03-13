@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   FileOutput,
-  FilePenLine,
   FileText,
   FileUp,
   LayoutDashboard,
@@ -22,7 +21,6 @@ const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, matches: ["/dashboard"] },
   { href: "/modelos", label: "Modelos", icon: FileText, matches: ["/modelos"] },
   { href: "/importar", label: "Importar", icon: FileUp, matches: ["/importar", "/mapeamento"] },
-  { href: "/editor", label: "Editor", icon: FilePenLine, matches: ["/editor"] },
   { href: "/extrair", label: "Extrair", icon: FileOutput, matches: ["/extrair"] }
 ];
 

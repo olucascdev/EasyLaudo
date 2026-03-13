@@ -42,6 +42,37 @@ export type MappingLookup = {
   created_at?: string;
 };
 
+export type ImportStep = "upload" | "mapping" | "editor";
+
+export type SavedImportFlowSummary = {
+  mapping_id: string;
+  spreadsheet_id: string;
+  spreadsheet_name: string;
+  template_id: string;
+  template_name: string;
+  row_count: number;
+  has_draft: boolean;
+  updated_at: string;
+};
+
+export type EditorDraft = {
+  id?: string;
+  mapping_id: string;
+  patients: Record<string, string>[];
+  selected_index: number;
+  updated_at: string;
+};
+
+export type EditorContext = {
+  mapping_id: string;
+  spreadsheet: SpreadsheetSummary;
+  template: TemplateSummary;
+  mapping: Record<string, string>;
+  patients: Record<string, string>[];
+  selected_index: number;
+  has_draft: boolean;
+};
+
 export type DashboardOverview = {
   report_counts: {
     gerado: number;

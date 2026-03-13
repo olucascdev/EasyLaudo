@@ -1,9 +1,3 @@
-export type WorkflowState = {
-  spreadsheetId?: string;
-  templateId?: string;
-  mapping?: Record<string, string>;
-};
-
 export type TemplatePreviewSegment =
   | {
       type: "text";
@@ -15,36 +9,6 @@ export type TemplatePreviewSegment =
       value: string;
       missing: boolean;
     };
-
-const STORAGE_KEY = "easylaudo.workflow";
-
-export function readWorkflowState(): WorkflowState {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as WorkflowState) : {};
-  } catch {
-    return {};
-  }
-}
-
-export function writeWorkflowState(next: WorkflowState) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-}
-
-export function mergeWorkflowState(partial: WorkflowState) {
-  writeWorkflowState({
-    ...readWorkflowState(),
-    ...partial
-  });
-}
 
 export function renderPreviewText(templateText: string, values: Record<string, string | null | undefined>) {
   return templateText.replace(/\{\{\s*([^{}\n\r]+?)\s*\}\}/g, (_, field) => values[field]?.toString() || "________");
