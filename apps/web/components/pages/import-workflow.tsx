@@ -307,11 +307,7 @@ export function ImportWorkflowPage({ initialStep = "upload" }: ImportWorkflowPro
         <Upload className="h-4 w-4" />
         Upload planilha
       </Button>
-    ) : (
-      <Button onClick={handleSaveMapping} loading={saving}>
-        Salvar mapeamento e ir para o Editor
-      </Button>
-    );
+    ) : null;
 
   return (
     <AuthGuard>
@@ -321,6 +317,20 @@ export function ImportWorkflowPage({ initialStep = "upload" }: ImportWorkflowPro
         actions={headerAction}
       >
         <div className="space-y-6">
+          {step === "mapping" ? (
+            <div className="flex justify-start">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setStep("upload");
+                  router.push("/importar");
+                }}
+              >
+                Voltar para importar
+              </Button>
+            </div>
+          ) : null}
+
           <Stepper step={step} />
 
           <Dialog

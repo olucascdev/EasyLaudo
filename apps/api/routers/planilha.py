@@ -10,6 +10,26 @@ from services.storage_service import delete_file, resolve_storage_path, save_upl
 router = APIRouter(prefix="/planilha", tags=["planilha"])
 
 
+def _serialize_spreadsheet(spreadsheet, *, file_data: dict | None = None) -> dict:
+    data = {
+        "id": str(spreadsheet["id"]),
+        "file_path": spreadsheet["file_path"],
+        "columns": spreadsheet["columns"],
+        "row_count": spreadsheet["row_count"],
+        "created_at": spreadsheet["created_at"].isoformat(),
+    }
+
+    if file_data is not None:
+        data["columns"] = file_data["columns"]
+        data["row_count"] = file_data["row_count"]
+        data["preview"] = file_data["preview"]
+        data["rows"] = file_data["rows"]
+        data["sheet_name"] = file_data["sheet_name"]
+        data["header_row_index"] = file_data["header_row_index"]
+
+    return data
+
+
 @router.post("/upload")
 async def upload_planilha(
     file: UploadFile = File(...),
@@ -36,17 +56,7 @@ async def upload_planilha(
         ),
     )
 
-    return success_response(
-        {
-            "id": str(spreadsheet["id"]),
-            "file_path": spreadsheet["file_path"],
-            "columns": spreadsheet["columns"],
-            "row_count": spreadsheet["row_count"],
-            "preview": spreadsheet_data["preview"],
-            "created_at": spreadsheet["created_at"].isoformat(),
-        },
-        status_code=201,
-    )
+    return success_response(_serialize_spreadsheet(spreadsheet, file_data=spreadsheet_data), status_code=201)
 
 
 @router.get("/list")
@@ -62,16 +72,7 @@ def listar_planilhas(current_user=Depends(get_current_user)):
     )
 
     return success_response(
-        [
-            {
-                "id": str(spreadsheet["id"]),
-                "file_path": spreadsheet["file_path"],
-                "columns": spreadsheet["columns"],
-                "row_count": spreadsheet["row_count"],
-                "created_at": spreadsheet["created_at"].isoformat(),
-            }
-            for spreadsheet in spreadsheets
-        ]
+        [_serialize_spreadsheet(spreadsheet) for spreadsheet in spreadsheets]
     )
 
 
@@ -89,17 +90,24 @@ def detalhar_planilha(spreadsheet_id: str, current_user=Depends(get_current_user
         raise HTTPException(status_code=404, detail="Planilha nao encontrada.")
 
     file_data = read_spreadsheet(resolve_storage_path(spreadsheet["file_path"]))
-    return success_response(
-        {
-            "id": str(spreadsheet["id"]),
-            "file_path": spreadsheet["file_path"],
-            "columns": spreadsheet["columns"],
-            "row_count": spreadsheet["row_count"],
-            "preview": file_data["preview"],
-            "rows": file_data["rows"],
-            "created_at": spreadsheet["created_at"].isoformat(),
-        }
-    )
+
+    if spreadsheet["columns"] != file_data["columns"] or spreadsheet["row_count"] != file_data["row_count"]:
+        spreadsheet = execute(
+            """
+            UPDATE spreadsheets
+            SET columns = %s, row_count = %s
+            WHERE id = %s AND user_id = %s
+            RETURNING id, file_path, columns, row_count, created_at
+            """,
+            (
+                Json(file_data["columns"]),
+                file_data["row_count"],
+                spreadsheet_id,
+                str(current_user["id"]),
+            ),
+        )
+
+    return success_response(_serialize_spreadsheet(spreadsheet, file_data=file_data))
 
 
 @router.delete("/{spreadsheet_id}")

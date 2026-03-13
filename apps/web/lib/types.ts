@@ -28,6 +28,8 @@ export type SpreadsheetSummary = {
   row_count: number;
   preview?: Record<string, string>[];
   rows?: Record<string, string>[];
+  sheet_name?: string | null;
+  header_row_index?: number | null;
   created_at: string;
 };
 
