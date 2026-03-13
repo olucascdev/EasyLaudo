@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { IBM_Plex_Mono, Manrope } from "next/font/google";
+import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 
 import "./globals.css";
+import { AppToaster } from "@/components/ui/sonner";
 
-const manrope = Manrope({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-manrope"
+  variable: "--font-sans"
 });
 
 const plexMono = IBM_Plex_Mono({
@@ -17,7 +18,10 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "EasyLaudo",
-  description: "Automacao bidirecional de laudos clinicos"
+  description: "Operacao de laudos clinicos com modelos DOCX, planilhas e extracao reversa",
+  icons: {
+    icon: "/icon.svg"
+  }
 };
 
 export default function RootLayout({
@@ -27,8 +31,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${manrope.variable} ${plexMono.variable} bg-mist font-[var(--font-manrope)] text-ink`}>
+      <body className={`${plusJakarta.variable} ${plexMono.variable} font-[var(--font-sans)] text-zinc-950 antialiased`}>
         {children}
+        <AppToaster />
       </body>
     </html>
   );

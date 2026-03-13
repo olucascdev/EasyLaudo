@@ -4,6 +4,18 @@ export type WorkflowState = {
   mapping?: Record<string, string>;
 };
 
+export type TemplatePreviewSegment =
+  | {
+      type: "text";
+      value: string;
+    }
+  | {
+      type: "field";
+      field: string;
+      value: string;
+      missing: boolean;
+    };
+
 const STORAGE_KEY = "easylaudo.workflow";
 
 export function readWorkflowState(): WorkflowState {
@@ -38,6 +50,56 @@ export function renderPreviewText(templateText: string, values: Record<string, s
   return templateText.replace(/\{\{\s*([a-zA-Z0-9_\- ]+?)\s*\}\}/g, (_, field) => values[field]?.toString() || "________");
 }
 
+export function getPreviewSegments(
+  templateText: string,
+  values: Record<string, string | null | undefined>
+): TemplatePreviewSegment[] {
+  const segments: TemplatePreviewSegment[] = [];
+  const matcher = /\{\{\s*([a-zA-Z0-9_\- ]+?)\s*\}\}/g;
+  let lastIndex = 0;
+
+  let match = matcher.exec(templateText);
+  while (match) {
+    const [token, rawField] = match;
+    const field = rawField.trim();
+    const index = match.index ?? 0;
+
+    if (index > lastIndex) {
+      segments.push({
+        type: "text",
+        value: templateText.slice(lastIndex, index)
+      });
+    }
+
+    const resolvedValue = values[field]?.toString().trim();
+    segments.push({
+      type: "field",
+      field,
+      value: resolvedValue || `{{${field}}}`,
+      missing: !resolvedValue
+    });
+
+    lastIndex = index + token.length;
+    match = matcher.exec(templateText);
+  }
+
+  if (lastIndex < templateText.length) {
+    segments.push({
+      type: "text",
+      value: templateText.slice(lastIndex)
+    });
+  }
+
+  return segments.length
+    ? segments
+    : [
+        {
+          type: "text",
+          value: templateText
+        }
+      ];
+}
+
 export function applyMapping(
   rows: Record<string, string>[],
   fields: string[],
@@ -65,4 +127,3 @@ export function downloadBlob(blob: Blob, filename: string) {
   anchor.click();
   URL.revokeObjectURL(url);
 }
-

@@ -4,36 +4,58 @@
 
 :root {
   color-scheme: light;
+  background-color: #09090b;
+}
+
+html {
+  min-height: 100%;
 }
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top right, rgba(226, 169, 59, 0.25), transparent 30%),
-    radial-gradient(circle at left center, rgba(248, 112, 96, 0.18), transparent 28%),
-    linear-gradient(180deg, #f4efe6 0%, #dbe9e3 100%);
-  color: #11221f;
+  background: #09090b;
+  color: #09090b;
 }
 
 * {
   box-sizing: border-box;
 }
 
+*::selection {
+  background: rgba(24, 24, 27, 0.12);
+}
+
+button,
 input,
 textarea,
-select {
+select,
+[role="button"] {
   outline: none;
 }
 
-.panel-input {
-  @apply w-full rounded-2xl border border-ink/10 bg-white px-4 py-3 text-sm text-ink placeholder:text-ink/35 focus:border-pine;
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-.panel-button {
-  @apply inline-flex items-center justify-center rounded-full bg-pine px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60;
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
 
-.panel-button-secondary {
-  @apply inline-flex items-center justify-center rounded-full border border-ink/10 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:border-pine hover:text-pine;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: rgba(113, 113, 122, 0.35);
+  background-clip: padding-box;
+}
+
+pre,
+textarea,
+input {
+  font: inherit;
+}

@@ -2,7 +2,13 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowRight, FileSpreadsheet, ScanText, Sparkles } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 
 type Mode = "login" | "register";
@@ -34,73 +40,103 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-[36px] border border-white/70 bg-white/80 shadow-panel backdrop-blur lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="bg-[linear-gradient(180deg,rgba(16,59,53,0.98),rgba(20,96,81,0.95),rgba(248,112,96,0.92))] p-8 text-white md:p-10">
-          <p className="font-mono text-xs uppercase tracking-[0.5em] text-white/60">EasyLaudo</p>
-          <h1 className="mt-4 text-4xl font-semibold leading-tight">
-            Laudos clinicos saem do Word e Excel sem virar retrabalho.
-          </h1>
-          <p className="mt-5 max-w-md text-base text-white/78">
-            Importe planilhas, aplique modelos DOCX, revise no editor e volte para XLSX quando precisar auditar.
-          </p>
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            {[
-              "Modelos DOCX com {{campos}}",
-              "Geracao individual e em lote",
-              "Extracao reversa para XLSX"
-            ].map((item) => (
-              <div key={item} className="rounded-3xl border border-white/15 bg-white/10 p-4 text-sm text-white/80">
-                {item}
+    <div className="min-h-screen bg-zinc-950 px-6 py-8 text-white">
+      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-7xl gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <Card className="overflow-hidden rounded-[32px] border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_28%),linear-gradient(180deg,#18181b_0%,#09090b_100%)] text-white shadow-none">
+          <CardContent className="flex h-full flex-col justify-between p-8 md:p-10">
+            <div>
+              <div className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-zinc-950">
+                  <span className="font-mono text-xs font-semibold">EL</span>
+                </div>
+                <span className="text-sm font-medium text-zinc-200">EasyLaudo</span>
               </div>
-            ))}
-          </div>
-        </div>
 
-        <div className="p-8 md:p-10">
-          <div className="mb-8 flex gap-2 rounded-full bg-mist p-2">
-            <button
-              type="button"
-              onClick={() => setMode("login")}
-              className={`flex-1 rounded-full px-4 py-2 text-sm font-semibold ${
-                mode === "login" ? "bg-pine text-white" : "text-ink/70"
-              }`}
-            >
-              Entrar
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("register")}
-              className={`flex-1 rounded-full px-4 py-2 text-sm font-semibold ${
-                mode === "register" ? "bg-pine text-white" : "text-ink/70"
-              }`}
-            >
-              Criar conta
-            </button>
-          </div>
+              <h1 className="mt-8 max-w-xl text-5xl font-semibold leading-tight tracking-tight">
+                Laudos, planilhas e revisao visual no mesmo fluxo.
+              </h1>
+              <p className="mt-5 max-w-lg text-base text-zinc-400">
+                Importe modelos DOCX, mapeie colunas do Excel, revise paciente por paciente e exporte tudo com menos retrabalho.
+              </p>
+            </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-ink/75">Email</label>
-              <input className="panel-input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+            <div className="grid gap-4 md:grid-cols-3">
+              {[
+                {
+                  icon: FileSpreadsheet,
+                  title: "Importe .xlsx",
+                  description: "Preview das primeiras linhas e mapeamento controlado."
+                },
+                {
+                  icon: Sparkles,
+                  title: "Edite no app",
+                  description: "Campos atualizados em tempo real com preview do laudo."
+                },
+                {
+                  icon: ScanText,
+                  title: "Volte para XLSX",
+                  description: "Extracao reversa para auditoria e revisao clinica."
+                }
+              ].map((item) => (
+                <div key={item.title} className="rounded-3xl border border-white/10 bg-white/5 p-5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/10">
+                    <item.icon className="h-5 w-5 text-zinc-100" />
+                  </div>
+                  <p className="mt-4 text-sm font-semibold">{item.title}</p>
+                  <p className="mt-2 text-sm text-zinc-400">{item.description}</p>
+                </div>
+              ))}
             </div>
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-ink/75">Senha</label>
-              <input
-                className="panel-input"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-[32px] border-zinc-200/80 bg-white">
+          <CardContent className="p-8 md:p-10">
+            <div className="max-w-md">
+              <p className="text-sm font-medium text-zinc-500">Acesso ao workspace</p>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950">
+                {mode === "login" ? "Entrar" : "Criar conta"}
+              </h2>
+              <p className="mt-2 text-sm text-zinc-500">
+                {mode === "login"
+                  ? "Use sua conta para continuar o fluxo atual."
+                  : "Crie uma conta para salvar modelos, importacoes e extracoes."}
+              </p>
             </div>
-            {error ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
-            <button type="submit" disabled={loading} className="panel-button w-full py-3">
-              {loading ? "Processando..." : mode === "login" ? "Entrar na plataforma" : "Criar conta e entrar"}
-            </button>
-          </form>
-        </div>
+
+            <Tabs value={mode} onValueChange={(value) => setMode(value as Mode)} className="mt-8">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Entrar</TabsTrigger>
+                <TabsTrigger value="register">Criar conta</TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Senha</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </div>
+
+              {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+
+              <Button type="submit" className="w-full" loading={loading}>
+                {mode === "login" ? "Entrar na plataforma" : "Criar conta e entrar"}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 }
-

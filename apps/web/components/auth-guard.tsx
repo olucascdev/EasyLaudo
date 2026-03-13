@@ -1,19 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { api } from "@/lib/api";
 import { User } from "@/lib/types";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type AuthGuardProps = {
   children: ReactNode;
 };
 
+type AuthContextValue = {
+  user: User | null;
+};
+
+const AuthContext = createContext<AuthContextValue>({ user: null });
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
 export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -21,8 +33,9 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
     api
       .get<User>("/auth/me")
-      .then(() => {
+      .then((loadedUser) => {
         if (!cancelled) {
+          setUser(loadedUser);
           setReady(true);
         }
       })
@@ -39,13 +52,29 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="rounded-full border border-pine/15 bg-white px-5 py-3 font-mono text-xs uppercase tracking-[0.35em] text-pine/60">
-          Carregando sessao
+      <div className="flex min-h-screen bg-zinc-950">
+        <aside className="hidden h-screen w-[240px] shrink-0 border-r border-white/10 bg-zinc-950 px-4 py-5 xl:flex xl:flex-col">
+          <Skeleton className="h-12 rounded-2xl bg-white/10" />
+          <div className="mt-8 space-y-2">
+            <Skeleton className="h-11 rounded-xl bg-white/10" />
+            <Skeleton className="h-11 rounded-xl bg-white/10" />
+            <Skeleton className="h-11 rounded-xl bg-white/10" />
+          </div>
+          <div className="mt-auto">
+            <Skeleton className="h-20 rounded-2xl bg-white/10" />
+          </div>
+        </aside>
+        <div className="flex flex-1 flex-col bg-zinc-50 px-8 py-6">
+          <Skeleton className="h-20 rounded-3xl" />
+          <div className="mt-6 grid flex-1 gap-6 xl:grid-cols-3">
+            <Skeleton className="h-48 rounded-3xl" />
+            <Skeleton className="h-48 rounded-3xl" />
+            <Skeleton className="h-48 rounded-3xl" />
+          </div>
         </div>
       </div>
     );
   }
 
-  return <>{children}</>;
+  return <AuthContext.Provider value={{ user }}>{children}</AuthContext.Provider>;
 }

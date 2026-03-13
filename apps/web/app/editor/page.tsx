@@ -1,13 +1,22 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { ArrowLeftRight, FileArchive, FileDown } from "lucide-react";
+import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { AuthGuard } from "@/components/auth-guard";
-import { SectionCard } from "@/components/section-card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { MappingLookup, SpreadsheetSummary, TemplateSummary } from "@/lib/types";
-import { applyMapping, downloadBlob, readWorkflowState, renderPreviewText } from "@/lib/workflow";
+import { applyMapping, downloadBlob, getPreviewSegments, readWorkflowState } from "@/lib/workflow";
+import { cn } from "@/lib/utils";
 
 export default function EditorPage() {
   const [spreadsheet, setSpreadsheet] = useState<SpreadsheetSummary | null>(null);
@@ -15,8 +24,8 @@ export default function EditorPage() {
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [patients, setPatients] = useState<Record<string, string>[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState<"" | "single" | "batch">("");
 
   useEffect(() => {
     async function loadEditorContext() {
@@ -46,8 +55,8 @@ export default function EditorPage() {
         setTemplate(loadedTemplate);
         setMapping(activeMapping);
         setPatients(applyMapping(loadedSpreadsheet.rows || [], loadedTemplate.fields, activeMapping));
-      } catch (requestError) {
-        setError(requestError instanceof Error ? requestError.message : "Falha ao carregar editor.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Falha ao carregar o editor.");
       } finally {
         setLoading(false);
       }
@@ -56,11 +65,12 @@ export default function EditorPage() {
     loadEditorContext();
   }, []);
 
+  useEffect(() => {
+    setSelectedIndex((current) => Math.min(current, Math.max(patients.length - 1, 0)));
+  }, [patients.length]);
+
   const selectedPatient = patients[selectedIndex] || {};
-  const preview = useMemo(
-    () => renderPreviewText(template?.text || "", selectedPatient),
-    [selectedPatient, template?.text]
-  );
+  const previewSegments = useMemo(() => getPreviewSegments(template?.text || "", selectedPatient), [selectedPatient, template?.text]);
 
   function updatePatientField(field: string, value: string) {
     setPatients((current) =>
@@ -73,6 +83,8 @@ export default function EditorPage() {
       return;
     }
 
+    setGenerating("single");
+
     try {
       const { blob, filename } = await api.blob("/laudo/gerar", {
         method: "POST",
@@ -82,8 +94,11 @@ export default function EditorPage() {
         })
       });
       downloadBlob(blob, filename || "laudo.docx");
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Falha ao gerar DOCX.");
+      toast.success("DOCX gerado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao gerar o DOCX.");
+    } finally {
+      setGenerating("");
     }
   }
 
@@ -91,6 +106,8 @@ export default function EditorPage() {
     if (!template) {
       return;
     }
+
+    setGenerating("batch");
 
     try {
       const { blob, filename } = await api.blob("/laudo/lote", {
@@ -101,79 +118,164 @@ export default function EditorPage() {
         })
       });
       downloadBlob(blob, filename || "laudos.zip");
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Falha ao gerar lote.");
+      toast.success("Lote gerado com sucesso.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao gerar o lote.");
+    } finally {
+      setGenerating("");
     }
   }
 
   return (
     <AuthGuard>
       <AppShell
-        title="Editor principal"
-        description="Revise os dados por paciente, ajuste campos pontuais e gere o DOCX individual ou em lote sem voltar para o Word."
+        title="Editor"
+        description="Revise paciente por paciente, ajuste os campos e valide o resultado final em uma visualizacao semelhante ao documento real."
+        actions={
+          <Button asChild variant="secondary">
+            <Link href="/importar?step=mapping">
+              <ArrowLeftRight className="h-4 w-4" />
+              Revisar mapeamento
+            </Link>
+          </Button>
+        }
+        contentClassName="flex min-h-0 overflow-hidden px-8 py-6"
       >
-        {loading ? <p className="rounded-3xl bg-white px-5 py-4 text-sm text-ink/60">Carregando editor...</p> : null}
-        {error ? <p className="rounded-3xl bg-red-50 px-5 py-4 text-sm text-red-700">{error}</p> : null}
+        {loading ? (
+          <div className="grid h-full min-h-0 gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+            <Skeleton className="h-full rounded-3xl" />
+            <Skeleton className="h-full rounded-3xl" />
+          </div>
+        ) : (
+          <div className="grid h-full min-h-0 gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+            <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border-zinc-200/80 bg-white/90">
+              <CardHeader className="border-b border-zinc-200/80">
+                <CardTitle>Pacientes</CardTitle>
+                <CardDescription>
+                  {patients.length} registros importados · {Object.keys(mapping).length} colunas mapeadas
+                </CardDescription>
+              </CardHeader>
 
-        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-          <SectionCard
-            title="Pacientes e formulario"
-            subtitle={`Mapeamento ativo com ${Object.keys(mapping).length} coluna(s).`}
-            actions={
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={generateSingle} disabled={!patients.length} className="panel-button">
-                  Gerar DOCX
-                </button>
-                <button type="button" onClick={generateBatch} disabled={!patients.length} className="panel-button-secondary">
-                  Gerar todos
-                </button>
-              </div>
-            }
-          >
-            <div className="grid gap-6 lg:grid-cols-[0.7fr_1.3fr]">
-              <div className="space-y-3">
-                {patients.length ? (
-                  patients.map((patient, index) => (
-                    <button
-                      key={`${patient.nome || patient.paciente || "paciente"}-${index}`}
-                      type="button"
-                      onClick={() => setSelectedIndex(index)}
-                      className={`flex w-full flex-col rounded-3xl border px-4 py-4 text-left transition ${
-                        selectedIndex === index ? "border-pine bg-pine text-white" : "border-ink/10 bg-mist/65 text-ink"
-                      }`}
-                    >
-                      <span className="text-sm font-semibold">{patient.nome || patient.paciente || `Paciente ${index + 1}`}</span>
-                      <span className={`mt-1 text-xs ${selectedIndex === index ? "text-white/80" : "text-ink/55"}`}>
-                        {Object.values(patient).filter(Boolean).length} campos preenchidos
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  <p className="text-sm text-ink/65">Nenhum paciente disponivel com o contexto atual.</p>
-                )}
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                {template?.fields.map((field) => (
-                  <div key={field}>
-                    <label className="mb-2 block text-sm font-semibold text-ink/70">{field}</label>
-                    <input
-                      className="panel-input"
-                      value={selectedPatient[field] || ""}
-                      onChange={(event) => updatePatientField(field, event.target.value)}
-                    />
+              <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+                <div className="border-b border-zinc-200/80 px-5 py-4">
+                  <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                    {patients.length ? (
+                      patients.map((patient, index) => {
+                        const active = index === selectedIndex;
+                        return (
+                          <button
+                            key={`${patient.nome || patient.paciente || "paciente"}-${index}`}
+                            type="button"
+                            onClick={() => setSelectedIndex(index)}
+                            className={cn(
+                              "w-full rounded-2xl border px-4 py-3 text-left transition",
+                              active ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-200 bg-zinc-50 hover:border-zinc-400"
+                            )}
+                          >
+                            <p className="text-sm font-semibold">
+                              {patient.nome || patient.paciente || `Paciente ${index + 1}`}
+                            </p>
+                            <p className={cn("mt-1 text-xs", active ? "text-zinc-300" : "text-zinc-500")}>
+                              {Object.values(patient).filter(Boolean).length} campos preenchidos
+                            </p>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <p className="text-sm text-zinc-500">Nenhum paciente disponivel.</p>
+                    )}
                   </div>
-                )) || <p className="text-sm text-ink/65">Escolha um modelo para editar os campos.</p>}
-              </div>
-            </div>
-          </SectionCard>
+                </div>
 
-          <SectionCard title="Preview em tempo real" subtitle="O preview substitui os marcadores no frontend antes da geracao final.">
-            <div className="rounded-[28px] border border-dashed border-pine/25 bg-white p-6">
-              <pre className="whitespace-pre-wrap text-sm leading-7 text-ink/80">{preview || "Nenhum template carregado."}</pre>
-            </div>
-          </SectionCard>
-        </div>
+                <div className="flex-1 overflow-y-auto px-5 py-4">
+                  <div className="space-y-4">
+                    {template?.fields.length ? (
+                      template.fields.map((field) => (
+                        <div key={field} className="space-y-2">
+                          <Label htmlFor={`field-${field}`}>{field}</Label>
+                          <Input
+                            id={`field-${field}`}
+                            value={selectedPatient[field] || ""}
+                            onChange={(event) => updatePatientField(field, event.target.value)}
+                          />
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-zinc-500">Nenhum campo disponivel no modelo atual.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-zinc-200/80 px-5 py-4">
+                  <Button className="w-full" onClick={generateSingle} loading={generating === "single"} disabled={!patients.length}>
+                    <FileDown className="h-4 w-4" />
+                    Gerar DOCX
+                  </Button>
+                  <Button
+                    className="mt-3 w-full"
+                    variant="secondary"
+                    onClick={generateBatch}
+                    loading={generating === "batch"}
+                    disabled={!patients.length}
+                  >
+                    <FileArchive className="h-4 w-4" />
+                    Gerar todos (.zip)
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border-zinc-200/80 bg-white/90">
+              <CardHeader className="border-b border-zinc-200/80">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Preview do laudo</CardTitle>
+                    <CardDescription>
+                      A substituicao dos marcadores acontece no frontend e responde imediatamente aos ajustes do formulario.
+                    </CardDescription>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="secondary">{template?.name || "Sem modelo"}</Badge>
+                    <Badge variant="secondary">{spreadsheet?.row_count || 0} pacientes</Badge>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="min-h-0 flex-1 bg-zinc-100 p-6">
+                <div className="h-full overflow-auto rounded-[28px] border border-zinc-200 bg-zinc-100 p-6">
+                  <div
+                    className="mx-auto bg-white px-[72px] py-[88px] text-[15px] leading-8 text-zinc-800 shadow-[0_24px_80px_rgba(24,24,27,0.14)]"
+                    style={{ width: 794, minHeight: 1123 }}
+                  >
+                    {template?.text ? (
+                      <div className="whitespace-pre-wrap font-serif">
+                        {previewSegments.map((segment, index) =>
+                          segment.type === "text" ? (
+                            <span key={`text-${index}`}>{segment.value}</span>
+                          ) : (
+                            <span
+                              key={`field-${segment.field}-${index}`}
+                              className={cn(
+                                "rounded-md px-1 py-0.5",
+                                segment.missing ? "bg-amber-100 text-amber-900" : "text-zinc-900"
+                              )}
+                            >
+                              {segment.value}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex min-h-[800px] items-center justify-center rounded-3xl border border-dashed border-zinc-200 bg-zinc-50 text-sm text-zinc-500">
+                        Nenhum texto de modelo disponivel para preview.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </AppShell>
     </AuthGuard>
   );
