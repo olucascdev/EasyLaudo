@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -18,9 +19,7 @@ type TemplateFieldEditorProps = {
 
 type SegmentTone = "plain" | "detected" | "manual" | "suspect";
 
-type SelectionPopover = {
-  top: number;
-  left: number;
+type SelectionDialog = {
   selectedText: string;
 };
 
@@ -150,53 +149,12 @@ function toneClassName(tone: SegmentTone) {
 }
 
 export function TemplateFieldEditor({ text, detectedFields, fields, onFieldsChange }: TemplateFieldEditorProps) {
-  const documentRef = useRef<HTMLDivElement | null>(null);
-  const popoverRef = useRef<HTMLDivElement | null>(null);
   const [manualFieldName, setManualFieldName] = useState("");
   const [selectionName, setSelectionName] = useState("");
-  const [selectionPopover, setSelectionPopover] = useState<SelectionPopover | null>(null);
+  const [selectionDialog, setSelectionDialog] = useState<SelectionDialog | null>(null);
 
   const detectedSet = new Set(detectedFields.map(normalizeFieldName).filter(Boolean));
   const confirmedSet = new Set(fields.map(normalizeFieldName).filter(Boolean));
-
-  useEffect(() => {
-    setSelectionPopover(null);
-    setSelectionName("");
-  }, [text, detectedFields, fields]);
-
-  useEffect(() => {
-    if (!selectionPopover) {
-      return;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node | null;
-      if (popoverRef.current?.contains(target)) {
-        return;
-      }
-      if (documentRef.current?.contains(target)) {
-        return;
-      }
-
-      setSelectionPopover(null);
-      setSelectionName("");
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setSelectionPopover(null);
-        setSelectionName("");
-      }
-    }
-
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleEscape);
-
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [selectionPopover]);
 
   function updateFields(nextFields: string[]) {
     const normalized = nextFields.map(normalizeFieldName).filter(Boolean);
@@ -230,7 +188,7 @@ export function TemplateFieldEditor({ text, detectedFields, fields, onFieldsChan
 
   function handleSelectionAdd() {
     addField(selectionName);
-    setSelectionPopover(null);
+    setSelectionDialog(null);
     setSelectionName("");
 
     const selection = window.getSelection();
@@ -238,15 +196,8 @@ export function TemplateFieldEditor({ text, detectedFields, fields, onFieldsChan
   }
 
   function handleDocumentMouseUp() {
-    const container = documentRef.current;
     const selection = window.getSelection();
-    if (!container || !selection || selection.isCollapsed || selection.rangeCount === 0) {
-      return;
-    }
-
-    const anchorNode = selection.anchorNode;
-    const focusNode = selection.focusNode;
-    if (!anchorNode || !focusNode || !container.contains(anchorNode) || !container.contains(focusNode)) {
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
       return;
     }
 
@@ -255,17 +206,7 @@ export function TemplateFieldEditor({ text, detectedFields, fields, onFieldsChan
       return;
     }
 
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    if (!rect.width && !rect.height) {
-      return;
-    }
-
-    setSelectionPopover({
-      top: rect.bottom + 10,
-      left: rect.left + rect.width / 2,
-      selectedText
-    });
+    setSelectionDialog({ selectedText });
     setSelectionName(inferFieldName(selectedText));
   }
 
@@ -296,7 +237,6 @@ export function TemplateFieldEditor({ text, detectedFields, fields, onFieldsChan
           </div>
 
           <div
-            ref={documentRef}
             className="relative mt-4 max-h-[55vh] overflow-auto rounded-[22px] border border-zinc-200 bg-white p-5"
             onMouseUp={handleDocumentMouseUp}
           >
@@ -324,15 +264,25 @@ export function TemplateFieldEditor({ text, detectedFields, fields, onFieldsChan
           </div>
         </div>
 
-        {selectionPopover ? (
-          <div
-            ref={popoverRef}
-            className="fixed z-[60] w-[320px] -translate-x-1/2 rounded-2xl border border-zinc-200 bg-white p-4 shadow-2xl"
-            style={{ top: selectionPopover.top, left: selectionPopover.left }}
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Trecho selecionado</p>
-            <p className="mt-2 max-h-12 overflow-hidden text-sm text-zinc-600">{selectionPopover.selectedText}</p>
-            <div className="mt-3 space-y-2">
+        <Dialog
+          open={Boolean(selectionDialog)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSelectionDialog(null);
+              setSelectionName("");
+            }
+          }}
+        >
+          <DialogContent className="max-w-md rounded-[28px]">
+            <DialogHeader>
+              <DialogTitle>Criar campo</DialogTitle>
+              <DialogDescription>O trecho selecionado sera usado para sugerir o nome do novo campo.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-400">Trecho selecionado</p>
+                <p className="mt-2 text-sm text-zinc-600">{selectionDialog?.selectedText}</p>
+              </div>
               <Input
                 autoFocus
                 value={selectionName}
@@ -345,24 +295,24 @@ export function TemplateFieldEditor({ text, detectedFields, fields, onFieldsChan
                   }
                 }}
               />
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setSelectionPopover(null);
-                    setSelectionName("");
-                  }}
-                >
-                  Cancelar
-                </Button>
-                <Button type="button" onClick={handleSelectionAdd}>
-                  Adicionar
-                </Button>
-              </div>
             </div>
-          </div>
-        ) : null}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setSelectionDialog(null);
+                  setSelectionName("");
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleSelectionAdd}>
+                Adicionar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="rounded-[28px] border border-zinc-200 bg-white p-5">

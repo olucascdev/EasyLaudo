@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PenLine, Plus, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -18,7 +17,6 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { TemplateProcessResult, TemplateSummary } from "@/lib/types";
-import { mergeWorkflowState } from "@/lib/workflow";
 import { formatDate } from "@/lib/utils";
 
 type ModalMode = "create" | "edit";
@@ -30,7 +28,6 @@ type TemplateEditorDocument = {
 };
 
 export default function ModelosPage() {
-  const router = useRouter();
   const uploadRequestId = useRef(0);
   const [open, setOpen] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>("create");
@@ -176,7 +173,6 @@ export default function ModelosPage() {
         });
 
         setTemplates((current) => [created, ...current]);
-        mergeWorkflowState({ templateId: created.id });
         toast.success("Modelo salvo.");
       } else {
         const updated = await api.put<TemplateSummary>(`/modelo/${editingTemplateId}/campos`, {
@@ -361,28 +357,7 @@ export default function ModelosPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-5 pt-6">
-                  <div className="flex flex-wrap gap-2">
-                    {template.fields.length ? (
-                      template.fields.map((field) => (
-                        <Badge key={field} variant="outline" className="px-3 py-1">
-                          {field}
-                        </Badge>
-                      ))
-                    ) : (
-                      <p className="text-sm text-zinc-500">Nenhum campo confirmado.</p>
-                    )}
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <Button
-                      onClick={() => {
-                        mergeWorkflowState({ templateId: template.id });
-                        toast.success(`Modelo ${template.name} selecionado.`);
-                        router.push("/importar?step=mapping");
-                      }}
-                    >
-                      Usar
-                    </Button>
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <Button
                       variant="secondary"
                       loading={loadingEditorId === template.id}
