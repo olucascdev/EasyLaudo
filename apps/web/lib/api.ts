@@ -80,6 +80,11 @@ export const api = {
       method: "POST",
       body: body ? JSON.stringify(body) : undefined
     }),
+  put: <T>(path: string, body?: unknown) =>
+    requestJson<T>(path, {
+      method: "PUT",
+      body: body ? JSON.stringify(body) : undefined
+    }),
   delete: <T>(path: string) =>
     requestJson<T>(path, {
       method: "DELETE"

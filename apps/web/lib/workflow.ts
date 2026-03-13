@@ -47,7 +47,7 @@ export function mergeWorkflowState(partial: WorkflowState) {
 }
 
 export function renderPreviewText(templateText: string, values: Record<string, string | null | undefined>) {
-  return templateText.replace(/\{\{\s*([a-zA-Z0-9_\- ]+?)\s*\}\}/g, (_, field) => values[field]?.toString() || "________");
+  return templateText.replace(/\{\{\s*([^{}\n\r]+?)\s*\}\}/g, (_, field) => values[field]?.toString() || "________");
 }
 
 export function getPreviewSegments(
@@ -55,7 +55,7 @@ export function getPreviewSegments(
   values: Record<string, string | null | undefined>
 ): TemplatePreviewSegment[] {
   const segments: TemplatePreviewSegment[] = [];
-  const matcher = /\{\{\s*([a-zA-Z0-9_\- ]+?)\s*\}\}/g;
+  const matcher = /\{\{\s*([^{}\n\r]+?)\s*\}\}/g;
   let lastIndex = 0;
 
   let match = matcher.exec(templateText);

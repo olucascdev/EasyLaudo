@@ -35,6 +35,16 @@ class ExportRowsPayload(BaseModel):
     rows: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class SaveTemplatePayload(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    file_path: str = Field(min_length=1, max_length=1024)
+    fields: list[str] = Field(default_factory=list)
+
+
+class UpdateTemplateFieldsPayload(BaseModel):
+    fields: list[str] = Field(default_factory=list)
+
+
 def success_response(data: Any, status_code: int = 200) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,

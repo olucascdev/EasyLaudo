@@ -10,7 +10,15 @@ export type TemplateSummary = {
   file_path: string;
   fields: string[];
   text?: string;
+  detected_fields?: string[];
   created_at: string;
+};
+
+export type TemplateProcessResult = {
+  file_path: string;
+  filename: string;
+  text: string;
+  detected_fields: string[];
 };
 
 export type SpreadsheetSummary = {
@@ -57,4 +65,3 @@ export type ExtractionResult = {
   data: Record<string, string | null>;
   message?: string;
 };
-
