@@ -5,7 +5,7 @@ from models.schemas import success_response
 from services.auth_service import get_current_user
 from services.db_service import execute, fetch_all, fetch_one
 from services.excel_service import read_spreadsheet
-from services.storage_service import resolve_storage_path, save_upload
+from services.storage_service import delete_file, resolve_storage_path, save_upload
 
 router = APIRouter(prefix="/planilha", tags=["planilha"])
 
@@ -101,3 +101,25 @@ def detalhar_planilha(spreadsheet_id: str, current_user=Depends(get_current_user
         }
     )
 
+
+@router.delete("/{spreadsheet_id}")
+def excluir_planilha(spreadsheet_id: str, current_user=Depends(get_current_user)):
+    spreadsheet = execute(
+        """
+        DELETE FROM spreadsheets
+        WHERE id = %s AND user_id = %s
+        RETURNING id, file_path
+        """,
+        (spreadsheet_id, str(current_user["id"])),
+    )
+    if not spreadsheet:
+        raise HTTPException(status_code=404, detail="Planilha nao encontrada.")
+
+    delete_file(spreadsheet["file_path"])
+
+    return success_response({"id": str(spreadsheet["id"]), "deleted": True})
+
+
+@router.post("/{spreadsheet_id}/delete")
+def excluir_planilha_post(spreadsheet_id: str, current_user=Depends(get_current_user)):
+    return excluir_planilha(spreadsheet_id, current_user)

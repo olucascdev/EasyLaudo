@@ -1,9 +1,10 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:82/api";
 
 type ApiEnvelope<T> = {
   success: boolean;
   data: T;
   error?: string;
+  detail?: string;
 };
 
 function buildUrl(path: string) {
@@ -13,7 +14,7 @@ function buildUrl(path: string) {
 async function parseError(response: Response) {
   try {
     const payload = (await response.json()) as ApiEnvelope<unknown>;
-    return payload.error || "Falha na requisicao.";
+    return payload.error || payload.detail || "Falha na requisicao.";
   } catch {
     return "Falha na requisicao.";
   }
@@ -29,9 +30,13 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     }
   });
 
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
   const payload = (await response.json()) as ApiEnvelope<T>;
-  if (!response.ok || !payload.success) {
-    throw new Error(payload.error || "Falha na requisicao.");
+  if (!payload.success) {
+    throw new Error(payload.error || payload.detail || "Falha na requisicao.");
   }
 
   return payload.data;

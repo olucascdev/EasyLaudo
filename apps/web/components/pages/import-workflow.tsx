@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CheckCircle2, Database, FileSpreadsheet, Sparkles } from "lucide-react";
+import { CheckCircle2, Database, FileSpreadsheet, Sparkles, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -12,6 +12,7 @@ import { FileDropzone } from "@/components/file-dropzone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -37,8 +38,8 @@ function Stepper({ step }: { step: WorkflowStep }) {
   const steps: Array<{ key: WorkflowStep; title: string; description: string }> = [
     {
       key: "upload",
-      title: "Upload",
-      description: "Importe a planilha e valide o preview."
+      title: "Planilhas",
+      description: "Envie e gerencie as planilhas importadas."
     },
     {
       key: "mapping",
@@ -93,6 +94,8 @@ function Stepper({ step }: { step: WorkflowStep }) {
 export function ImportWorkflowPage({ initialStep = "upload" }: ImportWorkflowProps) {
   const router = useRouter();
   const [step, setStep] = useState<WorkflowStep>(initialStep);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [spreadsheet, setSpreadsheet] = useState<SpreadsheetSummary | null>(null);
   const [spreadsheets, setSpreadsheets] = useState<SpreadsheetSummary[]>([]);
@@ -106,6 +109,8 @@ export function ImportWorkflowPage({ initialStep = "upload" }: ImportWorkflowPro
   const [loadingBase, setLoadingBase] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
+  const [spreadsheetToDelete, setSpreadsheetToDelete] = useState<SpreadsheetSummary | null>(null);
 
   useEffect(() => {
     async function loadBase() {
@@ -116,7 +121,9 @@ export function ImportWorkflowPage({ initialStep = "upload" }: ImportWorkflowPro
         ]);
 
         const workflow = readWorkflowState();
-        const nextSpreadsheetId = workflow.spreadsheetId || loadedSpreadsheets[0]?.id || "";
+        const workflowSpreadsheetStillExists = loadedSpreadsheets.some((item) => item.id === workflow.spreadsheetId);
+        const nextSpreadsheetId =
+          workflowSpreadsheetStillExists && workflow.spreadsheetId ? workflow.spreadsheetId : loadedSpreadsheets[0]?.id || "";
         const nextTemplateId = workflow.templateId || loadedTemplates[0]?.id || "";
 
         setTemplates(loadedTemplates);
@@ -191,10 +198,10 @@ export function ImportWorkflowPage({ initialStep = "upload" }: ImportWorkflowPro
   }, [selectedSpreadsheetId, selectedTemplateId]);
 
   useEffect(() => {
-    if (initialStep === "mapping" && spreadsheet) {
+    if (initialStep === "mapping" && selectedSpreadsheetId) {
       setStep("mapping");
     }
-  }, [initialStep, spreadsheet]);
+  }, [initialStep, selectedSpreadsheetId]);
 
   const mappedCount = useMemo(
     () => Object.values(mapping).filter((value) => value && value !== "__ignore__").length,
@@ -213,18 +220,51 @@ export function ImportWorkflowPage({ initialStep = "upload" }: ImportWorkflowPro
       const formData = new FormData();
       formData.append("file", file);
       const uploaded = await api.upload<SpreadsheetSummary>("/planilha/upload", formData);
-      setSpreadsheet(uploaded);
       setSelectedSpreadsheetId(uploaded.id);
       setSpreadsheets((current) => [uploaded, ...current.filter((item) => item.id !== uploaded.id)]);
+      setUploadDialogOpen(false);
+      setFile(null);
       mergeWorkflowState({ spreadsheetId: uploaded.id });
       toast.success("Planilha importada com sucesso.");
-      setStep("mapping");
-      router.replace("/importar?step=mapping");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao importar a planilha.");
     } finally {
       setUploading(false);
     }
+  }
+
+  async function handleDeleteSpreadsheet(spreadsheetId: string) {
+    setDeletingId(spreadsheetId);
+
+    try {
+      await api.post(`/planilha/${spreadsheetId}/delete`);
+      const remaining = spreadsheets.filter((item) => item.id !== spreadsheetId);
+      setSpreadsheets(remaining);
+
+      if (selectedSpreadsheetId === spreadsheetId) {
+        const nextSpreadsheetId = remaining[0]?.id || "";
+        setSelectedSpreadsheetId(nextSpreadsheetId);
+        if (!nextSpreadsheetId) {
+          setStep("upload");
+          router.replace("/importar");
+        }
+      }
+
+      setDeleteDialogOpen(false);
+      setSpreadsheetToDelete(null);
+      toast.success("Planilha removida.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao excluir a planilha.");
+    } finally {
+      setDeletingId("");
+    }
+  }
+
+  function handleStartMapping(spreadsheetId: string) {
+    setSelectedSpreadsheetId(spreadsheetId);
+    setStep("mapping");
+    mergeWorkflowState({ spreadsheetId });
+    router.replace("/importar?step=mapping");
   }
 
   async function handleSaveMapping() {
@@ -263,8 +303,9 @@ export function ImportWorkflowPage({ initialStep = "upload" }: ImportWorkflowPro
 
   const headerAction =
     step === "upload" ? (
-      <Button onClick={() => (spreadsheet ? setStep("mapping") : handleUpload())} loading={uploading}>
-        {spreadsheet ? "Continuar para mapeamento" : "Importar planilha"}
+      <Button onClick={() => setUploadDialogOpen(true)}>
+        <Upload className="h-4 w-4" />
+        Upload planilha
       </Button>
     ) : (
       <Button onClick={handleSaveMapping} loading={saving}>
@@ -276,120 +317,169 @@ export function ImportWorkflowPage({ initialStep = "upload" }: ImportWorkflowPro
     <AuthGuard>
       <AppShell
         title="Importar"
-        description="Carregue a planilha, valide o preview e associe cada coluna aos campos do modelo antes de abrir o editor."
+        description="Gerencie as planilhas enviadas e abra o mapeamento apenas quando quiser continuar o fluxo."
         actions={headerAction}
       >
         <div className="space-y-6">
           <Stepper step={step} />
 
+          <Dialog
+            open={uploadDialogOpen}
+            onOpenChange={(open) => {
+              setUploadDialogOpen(open);
+              if (!open) {
+                setFile(null);
+              }
+            }}
+          >
+            <DialogContent className="max-w-2xl rounded-[32px]">
+              <DialogHeader>
+                <DialogTitle>Upload de planilha</DialogTitle>
+                <DialogDescription>Envie um arquivo `.xlsx` para adiciona-lo a lista e depois mapear quando quiser.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-5">
+                <FileDropzone
+                  accept={{ "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] }}
+                  files={file ? [file] : []}
+                  onFilesChange={(files) => setFile(files[0] || null)}
+                  title="Arraste o arquivo .xlsx ou clique para selecionar"
+                  description="A planilha sera validada e listada na tabela principal."
+                  helperText="Upload de um arquivo por vez"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="secondary" onClick={() => setUploadDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleUpload} loading={uploading}>
+                  Enviar planilha
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={deleteDialogOpen}
+            onOpenChange={(open) => {
+              setDeleteDialogOpen(open);
+              if (!open && !deletingId) {
+                setSpreadsheetToDelete(null);
+              }
+            }}
+          >
+            <DialogContent className="max-w-md rounded-[28px]">
+              <DialogHeader>
+                <DialogTitle>Excluir planilha</DialogTitle>
+                <DialogDescription>Essa acao remove a planilha da lista e apaga o arquivo salvo no sistema.</DialogDescription>
+              </DialogHeader>
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                <p className="text-sm text-zinc-500">Arquivo</p>
+                <p className="mt-1 break-all font-medium text-zinc-950">{spreadsheetToDelete?.file_path.split("/").pop()}</p>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setDeleteDialogOpen(false);
+                    setSpreadsheetToDelete(null);
+                  }}
+                  disabled={Boolean(deletingId)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  loading={Boolean(deletingId)}
+                  onClick={() => {
+                    if (spreadsheetToDelete) {
+                      void handleDeleteSpreadsheet(spreadsheetToDelete.id);
+                    }
+                  }}
+                >
+                  Confirmar exclusao
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           {loadingBase ? (
-            <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+            <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
               <Skeleton className="h-[420px] rounded-3xl" />
               <Skeleton className="h-[420px] rounded-3xl" />
             </div>
           ) : null}
 
           {!loadingBase && step === "upload" ? (
-            <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
-              <Card className="overflow-hidden rounded-3xl border-zinc-200/80 bg-white/85">
-                <CardHeader className="border-b border-zinc-200/80">
-                  <CardTitle>Passo 1. Upload da planilha</CardTitle>
-                  <CardDescription>Arraste seu arquivo .xlsx aqui ou clique para selecionar.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6 pt-6">
-                  <FileDropzone
-                    accept={{ "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] }}
-                    files={file ? [file] : []}
-                    onFilesChange={(files) => setFile(files[0] || null)}
-                    title="Arraste seu arquivo .xlsx aqui ou clique para selecionar"
-                    description="Importamos as primeiras 5 linhas para validar o layout antes do mapeamento."
-                    helperText="Suporte a um arquivo por vez"
-                  />
-
-                  {spreadsheet ? (
-                    <div className="space-y-4">
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="secondary">{spreadsheet.columns.length} colunas detectadas</Badge>
-                        <Badge variant="secondary">{spreadsheet.row_count} pacientes encontrados</Badge>
-                        <Badge variant="outline">{formatDate(spreadsheet.created_at)}</Badge>
-                      </div>
-
-                      <div className="overflow-hidden rounded-2xl border border-zinc-200">
-                        <Table>
-                          <TableHeader className="bg-zinc-50">
-                            <TableRow>
-                              {spreadsheet.columns.map((column) => (
-                                <TableHead key={column}>{column}</TableHead>
-                              ))}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {(spreadsheet.preview || []).slice(0, 5).map((row, index) => (
-                              <TableRow key={`preview-${index}`}>
-                                {spreadsheet.columns.map((column) => (
-                                  <TableCell key={`${index}-${column}`} className="text-zinc-600">
-                                    {row[column] || "-"}
-                                  </TableCell>
-                                ))}
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-
-                      <Button className="w-full sm:w-auto" onClick={() => {
-                        setStep("mapping");
-                        router.replace("/importar?step=mapping");
-                      }}>
-                        Continuar para mapeamento
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-3xl border-zinc-200/80 bg-white/85">
-                <CardHeader className="border-b border-zinc-200/80">
-                  <CardTitle>Planilhas recentes</CardTitle>
-                  <CardDescription>Retome um upload anterior sem repetir a importacao.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-6">
-                  {spreadsheets.length ? (
-                    spreadsheets.map((item) => {
-                      const active = selectedSpreadsheetId === item.id;
-
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedSpreadsheetId(item.id);
-                            setStep("upload");
-                          }}
-                          className={cn(
-                            "w-full rounded-2xl border px-4 py-4 text-left transition",
-                            active ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-200 bg-zinc-50 hover:border-zinc-400"
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold">{item.file_path.split("/").pop()}</p>
-                              <p className={cn("mt-1 text-sm", active ? "text-zinc-300" : "text-zinc-500")}>
-                                {item.row_count} linhas
-                              </p>
+            <Card className="overflow-hidden rounded-3xl border-zinc-200/80 bg-white/85">
+              <CardHeader className="border-b border-zinc-200/80">
+                <CardTitle>Planilhas importadas</CardTitle>
+                <CardDescription>Lista simples das planilhas com acoes diretas.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {spreadsheets.length ? (
+                  <Table>
+                    <TableHeader className="bg-zinc-50">
+                      <TableRow>
+                        <TableHead>Nome do arquivo</TableHead>
+                        <TableHead className="hidden sm:table-cell">Importado em</TableHead>
+                        <TableHead className="text-right">Acoes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {spreadsheets.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-700">
+                                <FileSpreadsheet className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-zinc-950">{item.file_path.split("/").pop()}</p>
+                                <p className="text-xs text-zinc-500 sm:hidden">{formatDate(item.created_at)}</p>
+                              </div>
                             </div>
-                            <FileSpreadsheet className={cn("h-4 w-4 shrink-0", active ? "text-white" : "text-zinc-400")} />
-                          </div>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <p className="text-sm text-zinc-500">Nenhuma planilha enviada ainda.</p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                          </TableCell>
+                          <TableCell className="hidden text-zinc-600 sm:table-cell">{formatDate(item.created_at)}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col justify-end gap-2 sm:flex-row">
+                              <Button
+                                size="sm"
+                                onClick={() => handleStartMapping(item.id)}
+                              >
+                                Mapear
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                loading={deletingId === item.id}
+                                onClick={() => {
+                                  setSpreadsheetToDelete(item);
+                                  setDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Excluir
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="flex min-h-[280px] flex-col items-center justify-center p-10 text-center">
+                    <p className="text-lg font-semibold text-zinc-950">Nenhuma planilha importada</p>
+                    <p className="mt-2 max-w-md text-sm text-zinc-500">
+                      Use o botao de upload para enviar a primeira planilha.
+                    </p>
+                    <Button className="mt-6" onClick={() => setUploadDialogOpen(true)}>
+                      <Upload className="h-4 w-4" />
+                      Upload planilha
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           ) : null}
 
           {!loadingBase && step === "mapping" ? (

@@ -30,6 +30,7 @@ type TemplateEditorDocument = {
 export default function ModelosPage() {
   const uploadRequestId = useRef(0);
   const [open, setOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>("create");
   const [editingTemplateId, setEditingTemplateId] = useState("");
   const [name, setName] = useState("");
@@ -42,6 +43,7 @@ export default function ModelosPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [loadingEditorId, setLoadingEditorId] = useState("");
+  const [templateToDelete, setTemplateToDelete] = useState<TemplateSummary | null>(null);
 
   function loadTemplates() {
     api
@@ -218,15 +220,13 @@ export default function ModelosPage() {
   }
 
   async function handleDelete(templateId: string) {
-    if (!window.confirm("Excluir este modelo?")) {
-      return;
-    }
-
     setDeletingId(templateId);
 
     try {
-      await api.delete(`/modelo/${templateId}`);
+      await api.post(`/modelo/${templateId}/delete`);
       setTemplates((current) => current.filter((item) => item.id !== templateId));
+      setDeleteDialogOpen(false);
+      setTemplateToDelete(null);
       toast.success("Modelo removido.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao excluir o modelo.");
@@ -334,6 +334,50 @@ export default function ModelosPage() {
                 </div>
               </DialogContent>
             </Dialog>
+
+            <Dialog
+              open={deleteDialogOpen}
+              onOpenChange={(nextOpen) => {
+                setDeleteDialogOpen(nextOpen);
+                if (!nextOpen && !deletingId) {
+                  setTemplateToDelete(null);
+                }
+              }}
+            >
+              <DialogContent className="max-w-md rounded-[28px]">
+                <DialogHeader>
+                  <DialogTitle>Excluir modelo</DialogTitle>
+                  <DialogDescription>Essa acao remove o modelo salvo e apaga o arquivo vinculado no sistema.</DialogDescription>
+                </DialogHeader>
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-sm text-zinc-500">Modelo</p>
+                  <p className="mt-1 break-all font-medium text-zinc-950">{templateToDelete?.name}</p>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setDeleteDialogOpen(false);
+                      setTemplateToDelete(null);
+                    }}
+                    disabled={Boolean(deletingId)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    loading={Boolean(deletingId)}
+                    onClick={() => {
+                      if (templateToDelete) {
+                        void handleDelete(templateToDelete.id);
+                      }
+                    }}
+                  >
+                    Confirmar exclusao
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </>
         }
       >
@@ -369,7 +413,10 @@ export default function ModelosPage() {
                     <Button
                       variant="destructive"
                       loading={deletingId === template.id}
-                      onClick={() => handleDelete(template.id)}
+                      onClick={() => {
+                        setTemplateToDelete(template);
+                        setDeleteDialogOpen(true);
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                       Deletar

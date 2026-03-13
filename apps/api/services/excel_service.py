@@ -57,7 +57,7 @@ def read_spreadsheet(file_path: str | Path) -> dict:
 
     dataframe = data_rows.iloc[:, selected_indexes].copy()
     dataframe.columns = selected_columns
-    dataframe = dataframe.applymap(_clean_cell)
+    dataframe = dataframe.map(_clean_cell)
     dataframe = dataframe.loc[
         ~dataframe.apply(lambda row: all(not value for value in row), axis=1)
     ].reset_index(drop=True)

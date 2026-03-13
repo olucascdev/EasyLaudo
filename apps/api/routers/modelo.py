@@ -237,6 +237,15 @@ def atualizar_campos_modelo(
 
 @router.delete("/{template_id}")
 def deletar_modelo(template_id: str, current_user=Depends(get_current_user)):
+    execute(
+        """
+        UPDATE reports
+        SET template_id = NULL
+        WHERE template_id = %s AND user_id = %s
+        """,
+        (template_id, str(current_user["id"])),
+    )
+
     template = execute(
         """
         DELETE FROM templates
@@ -250,3 +259,8 @@ def deletar_modelo(template_id: str, current_user=Depends(get_current_user)):
 
     delete_file(template["file_path"])
     return success_response({"id": str(template["id"]), "deleted": True})
+
+
+@router.post("/{template_id}/delete")
+def deletar_modelo_post(template_id: str, current_user=Depends(get_current_user)):
+    return deletar_modelo(template_id, current_user)
