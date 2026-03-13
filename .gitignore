@@ -1,0 +1,12 @@
+.next
+node_modules
+__pycache__
+.pytest_cache
+.venv
+.env
+.env.local
+dist
+coverage
+storage/*
+!storage/.gitkeep
+

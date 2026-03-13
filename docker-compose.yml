@@ -1,0 +1,32 @@
+services:
+  web:
+    build: ./apps/web
+    env_file:
+      - ./apps/web/.env
+    ports:
+      - "3031:3000"
+    depends_on:
+      - api
+
+  api:
+    build: ./apps/api
+    env_file:
+      - ./apps/api/.env
+    ports:
+      - "8007:8000"
+    environment:
+      - STORAGE_PATH=/app/storage
+      - CORS_ORIGIN_REGEX=^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$
+      - COOKIE_SECURE=false
+    volumes:
+      - ./storage:/app/storage
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "82:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - web
+      - api
