@@ -3,8 +3,20 @@ import re
 from fastapi import APIRouter, HTTPException, Request
 
 from models.schemas import LoginPayload, RegisterPayload, success_response
-from services.auth_service import clear_auth_cookie, create_token, hash_password, set_auth_cookie, verify_password
+from services.audit_service import log_audit_event
+from services.auth_service import (
+    clear_auth_cookie,
+    create_token,
+    hash_password,
+    set_auth_cookie,
+    verify_password,
+)
 from services.db_service import execute, fetch_one
+from services.login_protection_service import (
+    assert_login_allowed,
+    clear_login_failures,
+    register_failed_login,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -26,6 +38,15 @@ def _validate_password_strength(password: str) -> None:
             status_code=400,
             detail="Senha fraca. Use pelo menos 8 caracteres com letras e numeros.",
         )
+
+
+def _resolve_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip() or "unknown"
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
 
 
 @router.post("/register")
@@ -56,14 +77,28 @@ def register(payload: RegisterPayload):
 
 
 @router.post("/login")
-def login(payload: LoginPayload):
+def login(payload: LoginPayload, request: Request):
     email = _validate_email(payload.email)
+    client_ip = _resolve_client_ip(request)
+    assert_login_allowed(email, client_ip)
+
     user = fetch_one(
         "SELECT id, email, password_hash, created_at FROM users WHERE email = %s",
         (email,),
     )
+
     if not user or not verify_password(payload.password, user["password_hash"]):
+        register_failed_login(email, client_ip)
+        log_audit_event(
+            action="auth.login_failed",
+            actor_id=None,
+            request_id=getattr(request.state, "request_id", None),
+            status="denied",
+            metadata={"client_ip": client_ip},
+        )
         raise HTTPException(status_code=401, detail="Credenciais invalidas.")
+
+    clear_login_failures(email, client_ip)
 
     public_user = {
         "id": str(user["id"]),
@@ -72,6 +107,15 @@ def login(payload: LoginPayload):
     }
     response = success_response(public_user)
     set_auth_cookie(response, create_token(public_user))
+
+    log_audit_event(
+        action="auth.login_success",
+        actor_id=public_user["id"],
+        request_id=getattr(request.state, "request_id", None),
+        status="ok",
+        metadata={"client_ip": client_ip},
+    )
+
     return response
 
 

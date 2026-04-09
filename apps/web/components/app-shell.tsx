@@ -8,7 +8,8 @@ import {
   FileText,
   FileUp,
   LayoutDashboard,
-  LogOut
+  LogOut,
+  ShieldCheck
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,7 +22,8 @@ const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, matches: ["/dashboard"] },
   { href: "/modelos", label: "Modelos", icon: FileText, matches: ["/modelos"] },
   { href: "/importar", label: "Importar", icon: FileUp, matches: ["/importar", "/mapeamento"] },
-  { href: "/extrair", label: "Extrair", icon: FileOutput, matches: ["/extrair"] }
+  { href: "/extrair", label: "Extrair", icon: FileOutput, matches: ["/extrair"] },
+  { href: "/privacidade", label: "Privacidade", icon: ShieldCheck, matches: ["/privacidade"] }
 ];
 
 type AppShellProps = {

@@ -32,12 +32,34 @@ def _b64url_decode(value: str) -> bytes:
 
 
 def _secret_key() -> str:
-    return os.getenv("JWT_SECRET", "easylaudo-dev-secret")
+    secret = os.getenv("JWT_SECRET")
+    if not secret:
+        raise RuntimeError("JWT_SECRET nao configurada.")
+    if len(secret) < 32:
+        raise RuntimeError("JWT_SECRET deve ter ao menos 32 caracteres.")
+    return secret
+
+
+def _cookie_samesite() -> str:
+    samesite = (os.getenv("COOKIE_SAMESITE") or "lax").strip().lower()
+    if samesite not in {"lax", "strict", "none"}:
+        raise RuntimeError("COOKIE_SAMESITE deve ser lax, strict ou none.")
+    return samesite
+
+
+def validate_security_config() -> None:
+    _secret_key()
+    samesite = _cookie_samesite()
+    secure_cookie = _is_truthy(os.getenv("COOKIE_SECURE", "true"))
+    if samesite == "none" and not secure_cookie:
+        raise RuntimeError("COOKIE_SECURE deve ser true quando COOKIE_SAMESITE=none.")
 
 
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000
+    )
     return f"{salt}${digest.hex()}"
 
 
@@ -47,7 +69,9 @@ def verify_password(password: str, password_hash: str) -> bool:
     except ValueError:
         return False
 
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000
+    )
     return hmac.compare_digest(digest.hex(), expected)
 
 
@@ -59,10 +83,16 @@ def create_token(user: dict[str, Any]) -> str:
         "exp": int(time.time()) + TOKEN_TTL_SECONDS,
     }
 
-    header_part = _b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
-    payload_part = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    header_part = _b64url_encode(
+        json.dumps(header, separators=(",", ":")).encode("utf-8")
+    )
+    payload_part = _b64url_encode(
+        json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    )
     signing_input = f"{header_part}.{payload_part}".encode("utf-8")
-    signature = hmac.new(_secret_key().encode("utf-8"), signing_input, hashlib.sha256).digest()
+    signature = hmac.new(
+        _secret_key().encode("utf-8"), signing_input, hashlib.sha256
+    ).digest()
     signature_part = _b64url_encode(signature)
 
     return f"{header_part}.{payload_part}.{signature_part}"
@@ -75,11 +105,20 @@ def decode_token(token: str) -> dict[str, Any]:
         raise HTTPException(status_code=401, detail="Token invalido.") from exc
 
     signing_input = f"{header_part}.{payload_part}".encode("utf-8")
-    expected_signature = hmac.new(_secret_key().encode("utf-8"), signing_input, hashlib.sha256).digest()
+    expected_signature = hmac.new(
+        _secret_key().encode("utf-8"), signing_input, hashlib.sha256
+    ).digest()
     if not hmac.compare_digest(_b64url_encode(expected_signature), signature_part):
         raise HTTPException(status_code=401, detail="Token invalido.")
 
-    payload = json.loads(_b64url_decode(payload_part))
+    try:
+        payload = json.loads(_b64url_decode(payload_part))
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=401, detail="Token invalido.") from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=401, detail="Token invalido.")
+
     if payload.get("exp", 0) < int(time.time()):
         raise HTTPException(status_code=401, detail="Sessao expirada.")
 
@@ -87,20 +126,28 @@ def decode_token(token: str) -> dict[str, Any]:
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
-    secure_cookie = _is_truthy(os.getenv("COOKIE_SECURE", "false"))
+    secure_cookie = _is_truthy(os.getenv("COOKIE_SECURE", "true"))
+    samesite = _cookie_samesite()
     response.set_cookie(
         key=AUTH_COOKIE_NAME,
         value=token,
         httponly=True,
         secure=secure_cookie,
-        samesite="lax",
+        samesite=samesite,
         max_age=TOKEN_TTL_SECONDS,
         path="/",
     )
 
 
 def clear_auth_cookie(response: Response) -> None:
-    response.delete_cookie(key=AUTH_COOKIE_NAME, path="/")
+    secure_cookie = _is_truthy(os.getenv("COOKIE_SECURE", "true"))
+    samesite = _cookie_samesite()
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        path="/",
+        secure=secure_cookie,
+        samesite=samesite,
+    )
 
 
 def get_current_user(request: Request):

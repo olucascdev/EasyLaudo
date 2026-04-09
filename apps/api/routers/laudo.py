@@ -1,5 +1,6 @@
 import re
 import zipfile
+import logging
 from datetime import datetime
 from io import BytesIO
 
@@ -14,6 +15,7 @@ from services.docx_service import combine_docx_documents, render_docx
 from services.storage_service import read_file_bytes, resolve_storage_path, save_bytes
 
 router = APIRouter(prefix="/laudo", tags=["laudo"])
+logger = logging.getLogger("easylaudo.laudo")
 
 
 def _safe_report_name(base_name: str) -> str:
@@ -22,7 +24,9 @@ def _safe_report_name(base_name: str) -> str:
 
 
 def _build_report_filename(patient_data: dict) -> str:
-    patient_name = patient_data.get("nome") or patient_data.get("paciente") or "paciente"
+    patient_name = (
+        patient_data.get("nome") or patient_data.get("paciente") or "paciente"
+    )
     date_label = datetime.now().strftime("%Y-%m-%d")
     return f"{_safe_report_name(str(patient_name))}_{date_label}.docx"
 
@@ -51,9 +55,13 @@ def gerar_laudo(payload: GenerateReportPayload, current_user=Depends(get_current
     template = _get_template(payload.template_id, str(current_user["id"]))
 
     try:
-        document_bytes = render_docx(resolve_storage_path(template["file_path"]), payload.patient_data)
+        document_bytes = render_docx(
+            resolve_storage_path(template["file_path"]), payload.patient_data
+        )
         filename = payload.filename or _build_report_filename(payload.patient_data)
-        relative_path = save_bytes(str(current_user["id"]), "reports", filename, document_bytes)
+        relative_path = save_bytes(
+            str(current_user["id"]), "reports", filename, document_bytes
+        )
         report = execute(
             """
             INSERT INTO reports (user_id, template_id, patient_data, file_path, status)
@@ -69,14 +77,20 @@ def gerar_laudo(payload: GenerateReportPayload, current_user=Depends(get_current
             ),
         )
     except Exception as exc:
+        logger.exception("Falha ao gerar laudo individual")
         execute(
             """
             INSERT INTO reports (user_id, template_id, patient_data, status)
             VALUES (%s, %s, %s, %s)
             """,
-            (str(current_user["id"]), payload.template_id, Json(payload.patient_data), "erro"),
+            (
+                str(current_user["id"]),
+                payload.template_id,
+                Json(payload.patient_data),
+                "erro",
+            ),
         )
-        raise HTTPException(status_code=500, detail=f"Falha ao gerar laudo: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Falha ao gerar laudo.") from exc
 
     return Response(
         content=document_bytes,
@@ -89,7 +103,9 @@ def gerar_laudo(payload: GenerateReportPayload, current_user=Depends(get_current
 
 
 @router.post("/lote")
-def gerar_lote(payload: BatchGenerateReportPayload, current_user=Depends(get_current_user)):
+def gerar_lote(
+    payload: BatchGenerateReportPayload, current_user=Depends(get_current_user)
+):
     template = _get_template(payload.template_id, str(current_user["id"]))
     template_path = resolve_storage_path(template["file_path"])
     rendered_documents: list[tuple[str, bytes]] = []
@@ -99,7 +115,9 @@ def gerar_lote(payload: BatchGenerateReportPayload, current_user=Depends(get_cur
             filename = _build_report_filename(patient_data)
             document_bytes = render_docx(template_path, patient_data)
             rendered_documents.append((filename, document_bytes))
-            relative_path = save_bytes(str(current_user["id"]), "reports", filename, document_bytes)
+            relative_path = save_bytes(
+                str(current_user["id"]), "reports", filename, document_bytes
+            )
             execute(
                 """
                 INSERT INTO reports (user_id, template_id, patient_data, file_path, status)
@@ -114,19 +132,29 @@ def gerar_lote(payload: BatchGenerateReportPayload, current_user=Depends(get_cur
                 ),
             )
         except Exception:
+            logger.exception("Falha ao gerar item do lote de laudos")
             execute(
                 """
                 INSERT INTO reports (user_id, template_id, patient_data, status)
                 VALUES (%s, %s, %s, %s)
                 """,
-                (str(current_user["id"]), payload.template_id, Json(patient_data), "erro"),
+                (
+                    str(current_user["id"]),
+                    payload.template_id,
+                    Json(patient_data),
+                    "erro",
+                ),
             )
 
     if not rendered_documents:
-        raise HTTPException(status_code=400, detail="Nenhum laudo foi gerado para exportacao.")
+        raise HTTPException(
+            status_code=400, detail="Nenhum laudo foi gerado para exportacao."
+        )
 
     if payload.mode == "combined":
-        combined_bytes = combine_docx_documents([document_bytes for _, document_bytes in rendered_documents])
+        combined_bytes = combine_docx_documents(
+            [document_bytes for _, document_bytes in rendered_documents]
+        )
         return Response(
             content=combined_bytes,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -144,7 +172,9 @@ def gerar_lote(payload: BatchGenerateReportPayload, current_user=Depends(get_cur
     return Response(
         content=zip_buffer.getvalue(),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{_build_batch_filename("laudos", "zip")}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{_build_batch_filename("laudos", "zip")}"'
+        },
     )
 
 

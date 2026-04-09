@@ -3,11 +3,22 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from psycopg2.extras import Json
 
-from models.schemas import SaveTemplatePayload, UpdateTemplateFieldsPayload, success_response
+from models.schemas import (
+    SaveTemplatePayload,
+    UpdateTemplateFieldsPayload,
+    success_response,
+)
 from services.auth_service import get_current_user
 from services.db_service import execute, fetch_all, fetch_one
 from services.docx_service import inspect_template
-from services.storage_service import delete_file, read_file_bytes, resolve_storage_path, save_bytes, save_upload
+from services.storage_service import (
+    delete_file,
+    read_file_bytes,
+    resolve_storage_path,
+    save_bytes,
+    save_upload,
+)
+from services.upload_security_service import validate_docx_upload
 
 router = APIRouter(prefix="/modelo", tags=["modelo"])
 
@@ -26,7 +37,9 @@ def _normalize_fields(fields: list[str]) -> list[str]:
     return normalized
 
 
-def _serialize_template(template, *, text: str | None = None, detected_fields: list[str] | None = None) -> dict[str, object]:
+def _serialize_template(
+    template, *, text: str | None = None, detected_fields: list[str] | None = None
+) -> dict[str, object]:
     data: dict[str, object] = {
         "id": str(template["id"]),
         "name": template["name"],
@@ -47,7 +60,13 @@ def _validate_owned_file(file_path: str, user_id: str):
     if not normalized_path.startswith(f"{user_id}/"):
         raise HTTPException(status_code=400, detail="Arquivo de modelo invalido.")
 
-    absolute_path = resolve_storage_path(normalized_path)
+    try:
+        absolute_path = resolve_storage_path(normalized_path)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail="Arquivo de modelo invalido."
+        ) from exc
+
     if not absolute_path.exists():
         raise HTTPException(status_code=404, detail="Arquivo de modelo nao encontrado.")
 
@@ -69,10 +88,8 @@ async def processar_upload_modelo(
 ):
     user_id = str(current_user["id"])
 
-    if not file.filename or not file.filename.lower().endswith(".docx"):
-        raise HTTPException(status_code=400, detail="Envie um arquivo DOCX valido.")
-
     content = await file.read()
+    validate_docx_upload(file.filename, file.content_type, content)
     relative_path = save_upload(user_id, "template_drafts", file.filename, content)
 
     try:
@@ -100,7 +117,9 @@ def salvar_modelo(payload: SaveTemplatePayload, current_user=Depends(get_current
 
     fields = _normalize_fields(payload.fields)
     if not fields:
-        raise HTTPException(status_code=400, detail="Confirme ao menos um campo antes de salvar.")
+        raise HTTPException(
+            status_code=400, detail="Confirme ao menos um campo antes de salvar."
+        )
 
     user_id = str(current_user["id"])
     draft_relative_path, _ = _validate_draft_file(payload.file_path, user_id)
@@ -149,10 +168,7 @@ def listar_modelos(current_user=Depends(get_current_user)):
         (str(current_user["id"]),),
     )
 
-    data = [
-        _serialize_template(template)
-        for template in templates
-    ]
+    data = [_serialize_template(template) for template in templates]
     return success_response(data)
 
 
@@ -211,7 +227,9 @@ def atualizar_campos_modelo(
 ):
     fields = _normalize_fields(payload.fields)
     if not fields:
-        raise HTTPException(status_code=400, detail="Confirme ao menos um campo antes de salvar.")
+        raise HTTPException(
+            status_code=400, detail="Confirme ao menos um campo antes de salvar."
+        )
 
     template = execute(
         """

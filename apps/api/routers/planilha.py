@@ -6,6 +6,7 @@ from services.auth_service import get_current_user
 from services.db_service import execute, fetch_all, fetch_one
 from services.excel_service import read_spreadsheet
 from services.storage_service import delete_file, resolve_storage_path, save_upload
+from services.upload_security_service import validate_xlsx_upload
 
 router = APIRouter(prefix="/planilha", tags=["planilha"])
 
@@ -35,11 +36,11 @@ async def upload_planilha(
     file: UploadFile = File(...),
     current_user=Depends(get_current_user),
 ):
-    if not file.filename or not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="Envie um arquivo XLSX valido.")
-
     content = await file.read()
-    relative_path = save_upload(str(current_user["id"]), "spreadsheets", file.filename, content)
+    validate_xlsx_upload(file.filename, file.content_type, content)
+    relative_path = save_upload(
+        str(current_user["id"]), "spreadsheets", file.filename, content
+    )
     spreadsheet_data = read_spreadsheet(resolve_storage_path(relative_path))
 
     spreadsheet = execute(
@@ -56,7 +57,9 @@ async def upload_planilha(
         ),
     )
 
-    return success_response(_serialize_spreadsheet(spreadsheet, file_data=spreadsheet_data), status_code=201)
+    return success_response(
+        _serialize_spreadsheet(spreadsheet, file_data=spreadsheet_data), status_code=201
+    )
 
 
 @router.get("/list")
@@ -91,7 +94,10 @@ def detalhar_planilha(spreadsheet_id: str, current_user=Depends(get_current_user
 
     file_data = read_spreadsheet(resolve_storage_path(spreadsheet["file_path"]))
 
-    if spreadsheet["columns"] != file_data["columns"] or spreadsheet["row_count"] != file_data["row_count"]:
+    if (
+        spreadsheet["columns"] != file_data["columns"]
+        or spreadsheet["row_count"] != file_data["row_count"]
+    ):
         spreadsheet = execute(
             """
             UPDATE spreadsheets

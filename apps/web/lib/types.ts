@@ -98,3 +98,37 @@ export type ExtractionResult = {
   data: Record<string, string | null>;
   message?: string;
 };
+
+export type RetentionPolicy = {
+  editor_drafts_days: number;
+  spreadsheets_days: number;
+  reports_days: number;
+  temporary_files_days: number;
+};
+
+export type LgpdTransparency = {
+  processing_purposes: string[];
+  third_party_processing: {
+    ai_extraction_enabled: boolean;
+    provider: string;
+  };
+  retention_policy: RetentionPolicy;
+};
+
+export type LgpdExportPayload = {
+  generated_at: string;
+  request_id?: string;
+  retention_policy: RetentionPolicy;
+  user: {
+    id: string;
+    email: string;
+    created_at: string;
+  };
+  data: {
+    templates: Array<Record<string, unknown>>;
+    spreadsheets: Array<Record<string, unknown>>;
+    mappings: Array<Record<string, unknown>>;
+    reports: Array<Record<string, unknown>>;
+    editor_drafts: Array<Record<string, unknown>>;
+  };
+};

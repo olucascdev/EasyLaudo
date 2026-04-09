@@ -1,4 +1,23 @@
-from . import auth, dashboard, extracao, laudo, mapeamento, modelo, planilha
+from . import (
+    auth,
+    compliance,
+    dashboard,
+    extracao,
+    laudo,
+    mapeamento,
+    modelo,
+    planilha,
+    privacy,
+)
 
-__all__ = ["auth", "dashboard", "extracao", "laudo", "mapeamento", "modelo", "planilha"]
-
+__all__ = [
+    "auth",
+    "compliance",
+    "dashboard",
+    "extracao",
+    "laudo",
+    "mapeamento",
+    "modelo",
+    "planilha",
+    "privacy",
+]

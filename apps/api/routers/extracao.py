@@ -6,10 +6,15 @@ from fastapi.responses import Response
 
 from models.schemas import ExportRowsPayload, success_response
 from services.auth_service import get_current_user
-from services.docx_service import extract_marked_values, extract_template_text, has_markers
+from services.docx_service import (
+    extract_marked_values,
+    extract_template_text,
+    has_markers,
+)
 from services.excel_service import export_rows_to_xlsx
 from services.ia_service import extrair_com_ia
 from services.storage_service import resolve_storage_path, save_upload
+from services.upload_security_service import max_extraction_files, validate_docx_upload
 
 router = APIRouter(prefix="/extracao", tags=["extracao"])
 
@@ -37,6 +42,10 @@ async def processar_docx(
     parsed_fields = _parse_fields(fields)
     if not files:
         raise HTTPException(status_code=400, detail="Envie pelo menos um arquivo DOCX.")
+    if len(files) > max_extraction_files():
+        raise HTTPException(
+            status_code=400, detail="Quantidade de arquivos excede o limite permitido."
+        )
 
     results = []
     for file in files:
@@ -53,7 +62,23 @@ async def processar_docx(
             continue
 
         content = await file.read()
-        relative_path = save_upload(str(current_user["id"]), "extractions", file.filename, content)
+        try:
+            validate_docx_upload(file.filename, file.content_type, content)
+        except HTTPException as validation_error:
+            results.append(
+                {
+                    "filename": file.filename,
+                    "status": "erro",
+                    "method": "validacao",
+                    "data": {},
+                    "message": validation_error.detail,
+                }
+            )
+            continue
+
+        relative_path = save_upload(
+            str(current_user["id"]), "extractions", file.filename, content
+        )
         absolute_path = resolve_storage_path(relative_path)
 
         try:
@@ -62,7 +87,11 @@ async def processar_docx(
                 method = "marcadores"
             else:
                 text = extract_template_text(absolute_path)
-                data = extrair_com_ia(text, parsed_fields) if parsed_fields else {"texto": text}
+                data = (
+                    extrair_com_ia(text, parsed_fields)
+                    if parsed_fields
+                    else {"texto": text}
+                )
                 method = "ia" if parsed_fields else "texto"
 
             results.append(
@@ -73,14 +102,14 @@ async def processar_docx(
                     "data": data,
                 }
             )
-        except Exception as exc:
+        except Exception:
             results.append(
                 {
                     "filename": file.filename,
                     "status": "extração manual necessária",
                     "method": "erro",
                     "data": {field: None for field in parsed_fields},
-                    "message": str(exc),
+                    "message": "Falha ao processar o documento com seguranca.",
                 }
             )
 

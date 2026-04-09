@@ -20,7 +20,9 @@ def ensure_storage() -> Path:
 
 def sanitize_filename(filename: str) -> str:
     name = Path(filename).name
-    normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    normalized = (
+        unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    )
     normalized = re.sub(r"[^a-zA-Z0-9._-]+", "_", normalized).strip("._")
     return normalized or "arquivo"
 
@@ -39,11 +41,24 @@ def save_upload(user_id: str, category: str, filename: str, content: bytes) -> s
 
 
 def save_bytes(user_id: str, category: str, filename: str, content: bytes) -> str:
-    return save_upload(user_id=user_id, category=category, filename=filename, content=content)
+    return save_upload(
+        user_id=user_id, category=category, filename=filename, content=content
+    )
 
 
 def resolve_storage_path(relative_path: str) -> Path:
-    return ensure_storage() / relative_path
+    base_path = ensure_storage().resolve()
+    candidate = Path(relative_path)
+    if candidate.is_absolute():
+        raise ValueError("Caminho absoluto nao permitido no storage.")
+
+    resolved_path = (base_path / candidate).resolve()
+    try:
+        resolved_path.relative_to(base_path)
+    except ValueError as exc:
+        raise ValueError("Caminho invalido para storage.") from exc
+
+    return resolved_path
 
 
 def delete_file(relative_path: str | None) -> None:
@@ -57,4 +72,3 @@ def delete_file(relative_path: str | None) -> None:
 
 def read_file_bytes(relative_path: str) -> bytes:
     return resolve_storage_path(relative_path).read_bytes()
-
